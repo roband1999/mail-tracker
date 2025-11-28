@@ -38,22 +38,21 @@ async function getUniqueOpenedPixels() {
   return uniquePixelIds.size
 }
 
-async function getPixelOpenStatus(pixelId: string) {
-  // Use count to explicitly check if any events exist for this pixel
+async function getPixelEventCount(pixelId: string) {
+  // Get the count of events for this pixel
   const { count, error } = await supabase
     .from('events')
     .select('*', { count: 'exact', head: true })
     .eq('pixel_id', pixelId)
-    .limit(1)
 
-  // If there's an error, assume not opened
+  // If there's an error, assume 0 events
   if (error) {
-    console.error('Error checking pixel open status:', error)
-    return false
+    console.error('Error checking pixel event count:', error)
+    return 0
   }
 
-  // Count should be a number - if > 0, pixel has been opened
-  return typeof count === 'number' && count > 0
+  // Return the count, defaulting to 0 if undefined
+  return typeof count === 'number' ? count : 0
 }
 
 export default async function Home() {
@@ -65,13 +64,13 @@ export default async function Home() {
   const conversionRate =
     totalPixels > 0 ? ((openedEmails / totalPixels) * 100).toFixed(1) : '0.0'
 
-  // Get open status for each pixel
+  // Get event count for each pixel
   const pixelsWithStatus = await Promise.all(
     pixels.map(async (pixel) => {
-      const isOpened = await getPixelOpenStatus(pixel.id)
+      const eventCount = await getPixelEventCount(pixel.id)
       return {
         ...pixel,
-        isOpened,
+        eventCount,
       }
     })
   )
@@ -126,7 +125,7 @@ export default async function Home() {
                     Created At
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Opened
+                    Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -153,14 +152,24 @@ export default async function Home() {
                         {new Date(pixel.created_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {pixel.isOpened ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Yes
-                          </span>
+                        {pixel.eventCount > 0 ? (
+                          <div className="tooltip-container">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 cursor-default">
+                              OPENED
+                            </span>
+                            <div className="tooltip">
+                              Opened {pixel.eventCount} time{pixel.eventCount > 1 ? 's' : ''}
+                            </div>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            No
-                          </span>
+                          <div className="tooltip-container">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 cursor-default">
+                              DELIVERED
+                            </span>
+                            <div className="tooltip">
+                              Not opened yet (no events)
+                            </div>
+                          </div>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
