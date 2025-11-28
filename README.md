@@ -1,36 +1,153 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Email Tracking Application
 
-## Getting Started
+A lightweight email tracking application built with Next.js and Supabase that tracks email opens using tracking pixels.
 
-First, run the development server:
+## Features
+
+- **Pixel Generation**: Create unique tracking pixels with UUIDs
+- **Open Tracking**: Track email opens with IP address and user-agent logging
+- **Web Dashboard**: View statistics, pixel list, and detailed event logs
+- **RESTful API**: Create and fetch pixels via API endpoints
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+ installed
+- A Supabase account and project
+
+### Installation
+
+1. Clone the repository and install dependencies:
+
+```bash
+npm install
+```
+
+2. Set up your Supabase database:
+
+   - Create a new Supabase project at [supabase.com](https://supabase.com)
+   - Run the SQL schema from `supabase-schema.sql` in your Supabase SQL editor:
+
+```sql
+-- Create pixels table
+CREATE TABLE IF NOT EXISTS pixels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  tracker_url TEXT GENERATED ALWAYS AS ('/tracker/' || id::text || '.png') STORED
+);
+
+-- Create events table
+CREATE TABLE IF NOT EXISTS events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pixel_id UUID NOT NULL REFERENCES pixels(id) ON DELETE CASCADE,
+  opened_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  ip_address TEXT,
+  user_agent TEXT
+);
+
+-- Create index on pixel_id for faster queries
+CREATE INDEX IF NOT EXISTS idx_events_pixel_id ON events(pixel_id);
+
+-- Create index on opened_at for faster date queries
+CREATE INDEX IF NOT EXISTS idx_events_opened_at ON events(opened_at);
+```
+
+3. Create a `.env.local` file in the root directory:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+```
+
+   You can find these values in your Supabase project settings under API:
+   - **Project URL** → use for `NEXT_PUBLIC_SUPABASE_URL`
+   - **Publishable key** → use for `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+4. Run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Creating a Pixel
 
-## Learn More
+1. Use the form on the dashboard to create a new pixel by entering an email address
+2. Or use the API endpoint:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+curl -X POST http://localhost:3000/api/pixels/create \
+  -H "Content-Type: application/json" \
+  -d '{"email": "example@email.com"}'
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The response will include a `tracker_url` that you can embed in your emails as an image:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```html
+<img src="https://yourdomain.com/tracker/{pixel-id}.png" alt="" />
+```
 
-## Deploy on Vercel
+### Fetching a Pixel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+curl http://localhost:3000/api/pixels/{pixel-id}
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Viewing Dashboard
+
+- **Home Page** (`/`): View summary statistics and all pixels
+- **Logs Page** (`/pixels/{id}/logs`): View detailed event logs for a specific pixel
+
+## API Endpoints
+
+- `POST /api/pixels/create` - Create a new tracking pixel
+- `GET /api/pixels/[id]` - Fetch pixel details by ID
+- `GET /tracker/[id].png` - Tracking pixel endpoint (serves 1x1 transparent PNG and logs the open event)
+
+## Project Structure
+
+```
+mail-tracker/
+├── app/
+│   ├── api/
+│   │   └── pixels/
+│   │       ├── create/
+│   │       └── [id]/
+│   ├── pixels/
+│   │   └── [id]/
+│   │       └── logs/
+│   ├── tracker/
+│   │   └── [...slug]/
+│   ├── components/
+│   ├── layout.tsx
+│   └── page.tsx
+├── lib/
+│   ├── supabase.ts
+│   └── png.ts
+└── supabase-schema.sql
+```
+
+## Deployment
+
+This application is ready to deploy to Vercel. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+
+### Quick Deploy to Vercel
+
+1. Push your code to GitHub/GitLab/Bitbucket
+2. Import your repository in [Vercel](https://vercel.com)
+3. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+4. Deploy!
+
+## Technologies
+
+- **Next.js 16** - React framework with App Router
+- **TypeScript** - Type safety
+- **Supabase** - Database and backend
+- **Tailwind CSS** - Styling
