@@ -35,9 +35,9 @@ async function getPixelOpenStatus(pixelId: string) {
     .select('id')
     .eq('pixel_id', pixelId)
     .limit(1)
-    .single()
 
-  return !error && data !== null
+  // If there's at least one event, the pixel has been opened
+  return !error && data !== null && data.length > 0
 }
 
 export default async function Home() {
