@@ -35,14 +35,21 @@ async function getUniqueOpenedPixels() {
 }
 
 async function getPixelOpenStatus(pixelId: string) {
-  const { data, error } = await supabase
+  // Use count to explicitly check if any events exist for this pixel
+  const { count, error } = await supabase
     .from('events')
-    .select('id')
+    .select('*', { count: 'exact', head: true })
     .eq('pixel_id', pixelId)
     .limit(1)
 
-  // If there's at least one event, the pixel has been opened
-  return !error && data !== null && data.length > 0
+  // If there's an error, assume not opened
+  if (error) {
+    console.error('Error checking pixel open status:', error)
+    return false
+  }
+
+  // Count should be a number - if > 0, pixel has been opened
+  return typeof count === 'number' && count > 0
 }
 
 export default async function Home() {
