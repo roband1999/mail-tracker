@@ -16,17 +16,22 @@ async function getPixels() {
   return data || []
 }
 
-async function getEvents() {
+async function getUniqueOpenedPixels() {
+  // Get all pixel_ids that have at least one event
   const { data, error } = await supabase
     .from('events')
     .select('pixel_id')
 
   if (error) {
-    console.error('Error fetching events:', error)
-    return []
+    console.error('Error fetching opened pixels:', error)
+    return 0
   }
 
-  return data || []
+  if (!data || data.length === 0) return 0
+
+  // Get unique pixel_ids
+  const uniquePixelIds = new Set(data.map((event) => event.pixel_id))
+  return uniquePixelIds.size
 }
 
 async function getPixelOpenStatus(pixelId: string) {
@@ -42,13 +47,12 @@ async function getPixelOpenStatus(pixelId: string) {
 
 export default async function Home() {
   const pixels = await getPixels()
-  const events = await getEvents()
 
   // Calculate stats
   const totalPixels = pixels.length
-  const totalEvents = events.length
+  const openedEmails = await getUniqueOpenedPixels()
   const conversionRate =
-    totalPixels > 0 ? ((totalEvents / totalPixels) * 100).toFixed(1) : '0.0'
+    totalPixels > 0 ? ((openedEmails / totalPixels) * 100).toFixed(1) : '0.0'
 
   // Get open status for each pixel
   const pixelsWithStatus = await Promise.all(
@@ -81,9 +85,9 @@ export default async function Home() {
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-sm font-medium text-gray-500 mb-2">
-              Read Events
+              Opened Emails
             </h2>
-            <p className="text-3xl font-bold text-gray-900">{totalEvents}</p>
+            <p className="text-3xl font-bold text-gray-900">{openedEmails}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-sm font-medium text-gray-500 mb-2">
