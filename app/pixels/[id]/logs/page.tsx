@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { notFound } from 'next/navigation'
 
+// Force dynamic rendering to ensure fresh data on each request
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 async function getPixel(id: string) {
   const { data, error } = await supabase
     .from('pixels')

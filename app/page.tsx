@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import CreatePixelForm from '@/app/components/CreatePixelForm'
 
+// Force dynamic rendering to ensure fresh data on each request
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 async function getPixels() {
   const { data, error } = await supabase
     .from('pixels')
