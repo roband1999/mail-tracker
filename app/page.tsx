@@ -21,10 +21,10 @@ async function getPixels() {
 }
 
 async function getUniqueOpenedPixels() {
-  // Get all pixel_ids that have at least one event
+  // Get all events with their pixel creation dates
   const { data, error } = await supabase
     .from('events')
-    .select('pixel_id')
+    .select('pixel_id, opened_at, pixels!inner(created_at)')
 
   if (error) {
     console.error('Error fetching opened pixels:', error)
@@ -33,17 +33,42 @@ async function getUniqueOpenedPixels() {
 
   if (!data || data.length === 0) return 0
 
-  // Get unique pixel_ids
-  const uniquePixelIds = new Set(data.map((event) => event.pixel_id))
+  // Filter out events within 10 seconds of pixel creation
+  const validEvents = data.filter((event: any) => {
+    const pixelCreatedAt = new Date(event.pixels.created_at).getTime()
+    const eventOpenedAt = new Date(event.opened_at).getTime()
+    const timeDiff = (eventOpenedAt - pixelCreatedAt) / 1000 // difference in seconds
+    return timeDiff >= 10
+  })
+
+  // Get unique pixel_ids from valid events
+  const uniquePixelIds = new Set(validEvents.map((event: any) => event.pixel_id))
   return uniquePixelIds.size
 }
 
 async function getPixelEventCount(pixelId: string) {
-  // Get the count of events for this pixel
+  // First get the pixel to know its creation date
+  const { data: pixel, error: pixelError } = await supabase
+    .from('pixels')
+    .select('created_at')
+    .eq('id', pixelId)
+    .single()
+
+  if (pixelError || !pixel) {
+    console.error('Error fetching pixel:', pixelError)
+    return 0
+  }
+
+  // Calculate the threshold (pixel creation + 10 seconds)
+  const pixelCreatedAt = new Date(pixel.created_at)
+  const threshold = new Date(pixelCreatedAt.getTime() + 10 * 1000).toISOString()
+
+  // Get events that occurred after the threshold
   const { count, error } = await supabase
     .from('events')
     .select('*', { count: 'exact', head: true })
     .eq('pixel_id', pixelId)
+    .gt('opened_at', threshold)
 
   // If there's an error, assume 0 events
   if (error) {

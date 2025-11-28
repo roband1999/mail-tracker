@@ -21,10 +21,28 @@ async function getPixel(id: string) {
 }
 
 async function getEvents(pixelId: string) {
+  // First get the pixel to know its creation date
+  const { data: pixel, error: pixelError } = await supabase
+    .from('pixels')
+    .select('created_at')
+    .eq('id', pixelId)
+    .single()
+
+  if (pixelError || !pixel) {
+    console.error('Error fetching pixel:', pixelError)
+    return []
+  }
+
+  // Calculate the threshold (pixel creation + 10 seconds)
+  const pixelCreatedAt = new Date(pixel.created_at)
+  const threshold = new Date(pixelCreatedAt.getTime() + 10 * 1000).toISOString()
+
+  // Get events that occurred after the threshold
   const { data, error } = await supabase
     .from('events')
     .select('*')
     .eq('pixel_id', pixelId)
+    .gt('opened_at', threshold)
     .order('opened_at', { ascending: false })
 
   if (error) {
