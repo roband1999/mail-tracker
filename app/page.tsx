@@ -20,6 +20,35 @@ async function getPixels() {
   return data || []
 }
 
+async function getLinksForPixel(pixelId: string) {
+  const { data, error } = await supabase
+    .from('links')
+    .select('id, destination_url')
+    .eq('pixel_id', pixelId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching links:', error)
+    return []
+  }
+
+  return data || []
+}
+
+async function getLinkClickCount(linkId: string) {
+  const { count, error } = await supabase
+    .from('link_events')
+    .select('*', { count: 'exact', head: true })
+    .eq('link_id', linkId)
+
+  if (error) {
+    console.error('Error checking link click count:', error)
+    return 0
+  }
+
+  return typeof count === 'number' ? count : 0
+}
+
 async function getUniqueOpenedPixels() {
   // Get all events with their pixel creation dates
   const { data, error } = await supabase
@@ -89,13 +118,24 @@ export default async function Home() {
   const conversionRate =
     totalPixels > 0 ? ((openedEmails / totalPixels) * 100).toFixed(1) : '0.0'
 
-  // Get event count for each pixel
+  // Get event count and links for each pixel
   const pixelsWithStatus = await Promise.all(
     pixels.map(async (pixel) => {
       const eventCount = await getPixelEventCount(pixel.id)
+      const links = await getLinksForPixel(pixel.id)
+      const linksWithClickCount = await Promise.all(
+        links.map(async (link) => {
+          const clickCount = await getLinkClickCount(link.id)
+          return {
+            ...link,
+            clickCount,
+          }
+        })
+      )
       return {
         ...pixel,
         eventCount,
+        links: linksWithClickCount,
       }
     })
   )
@@ -153,6 +193,9 @@ export default async function Home() {
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Links
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -161,7 +204,7 @@ export default async function Home() {
                 {pixelsWithStatus.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-6 py-4 text-center text-sm text-gray-500"
                     >
                       No pixels created yet
@@ -196,6 +239,38 @@ export default async function Home() {
                             </div>
                           </div>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-wrap gap-2">
+                          {pixel.links && pixel.links.length > 0 ? (
+                            pixel.links.map((link: any) => {
+                              const truncatedUrl =
+                                link.destination_url.length > 30
+                                  ? link.destination_url.substring(0, 27) + '...'
+                                  : link.destination_url
+                              const hasClicks = link.clickCount > 0
+                              return (
+                                <div key={link.id} className="tooltip-container">
+                                  <span
+                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-default ${hasClicks
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                      }`}
+                                  >
+                                    {truncatedUrl}
+                                  </span>
+                                  <div className="tooltip">
+                                    {link.destination_url}
+                                    <br />
+                                    Clicked {link.clickCount} time{link.clickCount !== 1 ? 's' : ''}
+                                  </div>
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <span className="text-gray-400 text-xs">No links</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <Link
