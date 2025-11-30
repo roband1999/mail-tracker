@@ -33,9 +33,9 @@ async function getEvents(pixelId: string) {
     return []
   }
 
-  // Calculate the threshold (pixel creation + 10 seconds)
+  // Calculate the threshold (pixel creation + 30 seconds)
   const pixelCreatedAt = new Date(pixel.created_at)
-  const threshold = new Date(pixelCreatedAt.getTime() + 10 * 1000).toISOString()
+  const threshold = new Date(pixelCreatedAt.getTime() + 60 * 1000).toISOString()
 
   // Get events that occurred after the threshold
   const { data, error } = await supabase
@@ -53,6 +53,43 @@ async function getEvents(pixelId: string) {
   return data || []
 }
 
+async function getLinkClickEvents(pixelId: string) {
+  // First get all links for this pixel
+  const { data: links, error: linksError } = await supabase
+    .from('links')
+    .select('id, destination_url')
+    .eq('pixel_id', pixelId)
+
+  if (linksError || !links || links.length === 0) {
+    return []
+  }
+
+  const linkIds = links.map((link) => link.id)
+
+  // Get all link events for these links
+  const { data: linkEvents, error: eventsError } = await supabase
+    .from('link_events')
+    .select('*')
+    .in('link_id', linkIds)
+    .order('clicked_at', { ascending: false })
+
+  if (eventsError) {
+    console.error('Error fetching link events:', eventsError)
+    return []
+  }
+
+  // Map link events with destination URLs
+  const eventsWithLinks = (linkEvents || []).map((event) => {
+    const link = links.find((l) => l.id === event.link_id)
+    return {
+      ...event,
+      destination_url: link?.destination_url || 'Unknown',
+    }
+  })
+
+  return eventsWithLinks
+}
+
 export default async function LogsPage({
   params,
 }: {
@@ -61,6 +98,7 @@ export default async function LogsPage({
   const { id } = await params
   const pixel = await getPixel(id)
   const events = await getEvents(id)
+  const linkClickEvents = await getLinkClickEvents(id)
 
   if (!pixel) {
     notFound()
@@ -112,7 +150,7 @@ export default async function LogsPage({
         </div>
 
         {/* Events Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white rounded-lg shadow overflow-hidden mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
               Open Events ({events.length})
@@ -166,6 +204,77 @@ export default async function LogsPage({
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono text-xs">
                         {event.pixel_id}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Link Click Events Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Link Click Events ({linkClickEvents.length})
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date/Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    IP Address
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User Agent
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Destination URL
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Link ID
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {linkClickEvents.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-6 py-4 text-center text-sm text-gray-500"
+                    >
+                      No link click events recorded yet
+                    </td>
+                  </tr>
+                ) : (
+                  linkClickEvents.map((event) => (
+                    <tr key={event.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(event.clicked_at).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                        {event.ip_address}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
+                        {event.user_agent}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">
+                        <a
+                          href={event.destination_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          {event.destination_url}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono text-xs">
+                        {event.link_id}
                       </td>
                     </tr>
                   ))
